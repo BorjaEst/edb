@@ -1,2 +1,2 @@
 # nntools
-Set of tools for easyly writing on mnesia database with erlang
+Set of tools for easily writing on mnesia database with erlang
