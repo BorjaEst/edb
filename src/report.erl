@@ -9,23 +9,35 @@
 -module(report).
 -compile([export_all, nowarn_export_all]). %%TODO: To delete after build
 
+-behaviour(gen_server).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 %% API
--export([]).
+-export([new/1, writte/2, close/1]).
 
--record(test_record, {id, data}).
--define(record_to_mapf(Record),
-	fun(Val) ->
-		maps:from_list(lists:zip(
-			record_info(fields, Record),
-			tl(tuple_to_list(Val))))
-	end
-).
+%% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, 
+		 terminate/2, code_change/3]).
+
+-define(SERVER, ?MODULE).
+-record(state, {}).
+
 
 %%====================================================================
 %% API
 %%====================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts the log server
+%% @end
+%%--------------------------------------------------------------------
+-spec(start_link() ->
+  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start_link() ->
+  gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -37,14 +49,7 @@
 new(Name) when is_atom(Name) ->
 	new(atom_to_list(Name));
 new(Name) ->
-	{ok, IoDevice} = file:open(Name ++ ".json", [write]),
-	undefined = put(this_pid_report, {IoDevice, first}),
-	file:write(IoDevice, <<"[">>).
-
-new(Path, Name) when is_atom(Name) ->
-	new(Path ++ "/" ++ atom_to_list(Name));
-new(Path, Name) ->
-	new(Path ++ "/" ++ Name).
+	gen_server:call(?SERVER, {new, Name}).
 
 
 %%--------------------------------------------------------------------
@@ -54,135 +59,183 @@ new(Path, Name) ->
 %% @end
 %%--------------------------------------------------------------------
 %TODO: Correct specs
-map(Map) ->
-	case get(this_pid_report) of
-		{IO, rest} -> IoDevice = IO, file:write(IoDevice, <<",">>);
-		{IO, first} -> IoDevice = IO, put(this_pid_report, {IoDevice, rest})
+writte(Ref, EJSON) ->
+	EJSON_Ext = EJSON#{
+			<<"timestamp">> => erlang:monotonic_time(millisecond),
+			<<"pid">> => erlang:term_to_binary(self())
+	},
+	gen_server:cast(?SERVER, {writte, Ref, EJSON_Ext}).
+
+	
+%%--------------------------------------------------------------------
+%% @doc
+%%
+%%
+%% @end
+%%--------------------------------------------------------------------
+%TODO: Correct specs
+close(Ref) ->
+	gen_server:call(?SERVER, {close, Ref}).
+
+
+%%%===================================================================
+%%% gen_server callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Initializes the server
+%%
+%% @spec init(Args) -> {ok, State} |
+%%                     {ok, State, Timeout} |
+%%                     ignore |
+%%                     {stop, Reason}
+%% @end
+%%--------------------------------------------------------------------
+-spec(init(Args :: term()) ->
+  {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
+  {stop, Reason :: term()} | ignore).
+init([]) ->
+  {ok, #state{}}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Handling call messages
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
+    State :: #state{}) ->
+  {reply, Reply :: term(), NewState :: #state{}} |
+  {reply, Reply :: term(), NewState :: #state{}, timeout() | hibernate} |
+  {noreply, NewState :: #state{}} |
+  {noreply, NewState :: #state{}, timeout() | hibernate} |
+  {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
+  {stop, Reason :: term(), NewState :: #state{}}).
+handle_call({new, File}, _From, State) ->
+	case file:open(File, [write]) of
+		{ok, IoDevice} ->
+			Reply = {ok, add_iodevice(IoDevice)};
+		{error, Reason} ->
+			Reply = {error, Reason} 
 	end,
-	file:write(IoDevice, jsone:encode(
-		Map#{
-			timestamp => erlang:monotonic_time(millisecond),
-			pid => format_pid(self())
-		}
-	)).
+	{reply, Reply, State};
+
+handle_call({close, Ref}, _From, State) ->
+	Reply = del_iodevice(Ref),
+	{reply, Reply, State};
+handle_call(_Request, _From, State) ->
+	?LOG_INFO("Unexpected message"),
+	{reply, ok, State}.
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%%
+%% Handling cast messages
 %%
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
-format_reference(Reference) when is_reference(Reference) ->
-	list_to_binary(ref_to_list(Reference)).
+-spec(handle_cast(Request :: term(), State :: #state{}) ->
+  {noreply, NewState :: #state{}} |
+  {noreply, NewState :: #state{}, timeout() | hibernate} |
+  {stop, Reason :: term(), NewState :: #state{}}).
+
+handle_cast({writte, Ref, EJSON}, State) ->
+	writte_iodevice(Ref, EJSON),
+	{noreply, State};
+handle_cast(_Request, State) ->
+	?LOG_INFO("Unexpected message"),
+  	{noreply, State}.
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
+%% Handling all non call/cast messages
 %%
-%%
+%% @spec handle_info(Info, State) -> {noreply, State} |
+%%                                   {noreply, State, Timeout} |
+%%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
-format_pid(PId) when is_pid(PId) ->
-	list_to_binary(pid_to_list(PId)).
+-spec(handle_info(Info :: timeout() | term(), State :: #state{}) ->
+  {noreply, NewState :: #state{}} |
+  {noreply, NewState :: #state{}, timeout() | hibernate} |
+  {stop, Reason :: term(), NewState :: #state{}}).
+handle_info(_Info, State) ->
+	?LOG_INFO("Unexpected message"),
+	{noreply, State}.
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
+%% This function is called by a gen_server when it is about to
+%% terminate. It should be the opposite of Module:init/1 and do any
+%% necessary cleaning up. When it returns, the gen_server terminates
+%% with Reason. The return value is ignored.
 %%
-%%
+%% @spec terminate(Reason, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
-format_tuple(Tuple) when is_tuple(Tuple) ->
-	[format_any(Element) || Element <- tuple_to_list(Tuple)].
-
+-spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
+	State :: #state{}) -> term()).
+terminate(_Reason, _State) ->
+	[del_iodevice(Ref) || Ref <- maps:keys(get(io_devices))],
+	ok.
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
+%% Convert process state when code is changed
 %%
-%%
+%% @spec code_change(OldVsn, State, Extra) -> {ok, NewState}
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
-format_map(Map) when is_map(Map) ->
-	maps:from_list([{format_key(Key), format_any(Value)} || {Key, Value} <- maps:to_list(Map)]).
+-spec(code_change(OldVsn :: term() | {down, term()}, State :: #state{},
+    			  Extra :: term()) ->
+	{ok, NewState :: #state{}} | {error, Reason :: term()}).
+code_change(_OldVsn, State, _Extra) ->
+	?LOG_INFO("Unexpected message"),
+	{ok, State}.
 
-%%--------------------------------------------------------------------
-%% @doc
-%%
-%%
-%% @end
-%%--------------------------------------------------------------------
-%TODO: Correct specs
-format_function(Function) when is_function(Function) ->
-	list_to_binary(io_lib:write(Function)).
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%%
-%%
-%% @end
-%%--------------------------------------------------------------------
-%TODO: Correct specs
-format_list(List) when is_list(List) ->
-	[format_any(Element) || Element <- List].
-
-%%--------------------------------------------------------------------
-%% @doc
-%%
-%%
-%% @end
-%%--------------------------------------------------------------------
-%TODO: Correct specs
-format_any(Any) ->
-	if
-		is_map(Any) -> format_map(Any);
-		is_list(Any) -> format_list(Any);
-		is_tuple(Any) -> format_tuple(Any);
-		is_pid(Any) -> format_pid(Any);
-		is_function(Any) -> format_function(Any);
-		is_reference(Any) -> format_reference(Any);
-		true -> Any
-	end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%%
-%%
-%% @end
-%%--------------------------------------------------------------------
-%TODO: Correct specs
-format_key(Key) ->
-	if
-		is_pid(Key) -> format_pid(Key);
-		is_reference(Key) -> format_reference(Key);
-		is_list(Key) -> list_to_binary(io_lib:write(Key));
-		is_tuple(Key) -> list_to_binary(io_lib:write(Key));
-		is_function(Key) -> format_function(Key);
-		is_map(Key) -> list_to_binary(io_lib:write(Key));
-		true -> Key
-	end.
+% ....................................................................
+add_iodevice(IoDevice) ->
+	IoDev_Map = get(io_devices),
+	Ref = make_ref(),
+	put(io_devices, IoDev_Map#{Ref => {IoDevice, next_is_val}}),
+    file:write(IoDevice, <<"[">>),
+	Ref.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%%
-%%
-%% @end
-%%--------------------------------------------------------------------
-%TODO: Correct specs
-close() ->
-	{IoDevice, _} = get(this_pid_report),
-	file:write(IoDevice, <<"]">>),
+% ....................................................................
+del_iodevice(Ref) ->
+    IoDev_Map = get(io_devices),
+	{IoDevice, _} = maps:get(Ref, IoDev_Map),
+	file:write(IoDevice, <<"[">>),
+	put(io_devices, maps:remove(Ref, IoDev_Map)),
 	file:close(IoDevice).
 
-%%====================================================================
-%% Internal functions
-%%====================================================================
 
-% ......................................................................................................................
-internal_function_example(_) ->
-	none.
+% ....................................................................
+writte_iodevice(Ref, EJSON) ->
+	IoDev_Map = get(io_devices),
+	UpdateFun = fun(Val) -> writte_ejson(Val, EJSON) end,
+    put(io_devices, 
+		maps:update_with(Ref, UpdateFun, IoDev_Map)).
+
+writte_ejson({IoDevice, next_is_val}, EJSON) ->
+	Json = jiffy:encode(EJSON),
+	file:write(IoDevice, Json),
+	{IoDevice, next_is_separator};
+writte_ejson({IoDevice, next_is_separator}, EJSON) ->
+	file:write(IoDevice, <<",">>),
+	writte({IoDevice, next_is_val}, EJSON).
+
 
 %%====================================================================
 %% Eunit white box tests
@@ -190,32 +243,15 @@ internal_function_example(_) ->
 
 % ----------------------------------------------------------------------------------------------------------------------
 % TESTS DESCRIPTIONS ---------------------------------------------------------------------------------------------------
-simple_report_test_() ->
-	% {setup, Where, Setup, Cleanup, Tests | Instantiator}
-	[
-		{"Possible to report a in file without error",
-		 {setup, local, fun report_opening/0, fun report_closing/1, fun simple_state_report/1}}
-	].
+
 
 % ----------------------------------------------------------------------------------------------------------------------
 % SPECIFIC SETUP FUNCTIONS ---------------------------------------------------------------------------------------------
-report_opening() ->
-	report:new(report_test).
 
-report_closing(_) ->
-	report:close().
 
 % ----------------------------------------------------------------------------------------------------------------------
 % ACTUAL TESTS ---------------------------------------------------------------------------------------------------------
-simple_state_report(_) ->
-	MapTest_record = ?record_to_mapf(test_record),
-	DataMap = MapTest_record(#test_record{
-		id   = this_id,
-		data = [data_1, data_2, data_3]
-	}),
-	[
-		?_assertMatch({_, _}, report:map(DataMap))
-	].
+
 
 
 % ----------------------------------------------------------------------------------------------------------------------
