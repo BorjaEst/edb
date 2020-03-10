@@ -21,6 +21,7 @@
 		 terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE).
+-define(EUNIT_TEST_FILE, "eunit_report_test.json").
 -record(state, {}).
 
 
@@ -97,7 +98,8 @@ close(Ref) ->
   {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([]) ->
-  {ok, #state{}}.
+	put(io_devices, #{}),
+	{ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -242,16 +244,46 @@ writte_ejson({IoDevice, next_is_separator}, EJSON) ->
 %%====================================================================
 
 % ----------------------------------------------------------------------------------------------------------------------
-% TESTS DESCRIPTIONS ---------------------------------------------------------------------------------------------------
+% SPECIFIC SETUP FUNCTIONS ---------------------------------------------------------------------------------------------
+with_iodevice() -> 
+	put(io_devices, #{}),
+	{ok, IoDevice} = file:open(?EUNIT_TEST_FILE, [write]),
+	put(io, IoDevice).
+
+delete_file(_) -> 
+	file:delete(?EUNIT_TEST_FILE).
 
 
 % ----------------------------------------------------------------------------------------------------------------------
-% SPECIFIC SETUP FUNCTIONS ---------------------------------------------------------------------------------------------
+% TESTS DESCRIPTIONS ---------------------------------------------------------------------------------------------------
+make_report_test_() ->
+    [{"Correct IoDevice addition, writting and deletion with internal functions",
+      {setup, local, fun with_iodevice/0, fun delete_file/1,
+	   {inorder, 
+        [{"Correct IoDevice addition", ?_assert(add_iodevice_test())},
+		 {"Correct IoDevice writting", ?_assert(writte_iodevice_test())},
+		 {"Correct IoDevice clossing", ?_assert(del_iodevice_test())},
+		 {"io_devices is empty ", ?_assertMatch(#{}, get(io_devices))}]}}}].
 
 
 % ----------------------------------------------------------------------------------------------------------------------
 % ACTUAL TESTS ---------------------------------------------------------------------------------------------------------
+add_iodevice_test() ->
+	IoDevice = get(io),
+	add_iodevice(IoDevice),
+    lists:all(
+		fun is_reference/1, 
+		maps:keys(get(io_devices))).
 
+writte_iodevice_test() ->
+	[Ref] =  maps:keys(get(io_devices)),
+	EJSON = #{<<"foo">> => <<"bar">>},
+	writte_iodevice(Ref, EJSON),
+	true.
+
+del_iodevice_test() ->
+	[Ref] =  maps:keys(get(io_devices)),
+	ok == del_iodevice(Ref).
 
 
 % ----------------------------------------------------------------------------------------------------------------------
