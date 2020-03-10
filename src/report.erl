@@ -14,7 +14,7 @@
 -include_lib("kernel/include/logger.hrl").
 
 %% API
--export([new/1, writte/2, close/1]).
+-export([start_link/0, start/0, new/1, write/2, close/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, 
@@ -31,13 +31,24 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Starts the log server
+%% Starts the log server with a link (for supervisors).
 %% @end
 %%--------------------------------------------------------------------
 -spec(start_link() ->
   {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts the log server
+%% @end
+%%--------------------------------------------------------------------
+-spec(start() ->
+  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start() ->
+  gen_server:start({local, ?SERVER}, ?MODULE, [], []).
 
 
 %%--------------------------------------------------------------------
@@ -60,12 +71,12 @@ new(Name) ->
 %% @end
 %%--------------------------------------------------------------------
 %TODO: Correct specs
-writte(Ref, EJSON) ->
+write(Ref, EJSON) ->
 	EJSON_Ext = EJSON#{
 			<<"timestamp">> => erlang:monotonic_time(millisecond),
 			<<"pid">> => erlang:term_to_binary(self())
 	},
-	gen_server:cast(?SERVER, {writte, Ref, EJSON_Ext}).
+	gen_server:cast(?SERVER, {write, Ref, EJSON_Ext}).
 
 	
 %%--------------------------------------------------------------------
@@ -98,6 +109,7 @@ close(Ref) ->
   {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([]) ->
+	process_flag(trap_exit, true),
 	put(io_devices, #{}),
 	{ok, #state{}}.
 
@@ -144,8 +156,8 @@ handle_call(_Request, _From, State) ->
   {noreply, NewState :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #state{}}).
 
-handle_cast({writte, Ref, EJSON}, State) ->
-	writte_iodevice(Ref, EJSON),
+handle_cast({write, Ref, EJSON}, State) ->
+	write_iodevice(Ref, EJSON),
 	{noreply, State};
 handle_cast(_Request, State) ->
 	?LOG_INFO("Unexpected message"),
@@ -224,19 +236,19 @@ del_iodevice(Ref) ->
 
 
 % ....................................................................
-writte_iodevice(Ref, EJSON) ->
+write_iodevice(Ref, EJSON) ->
 	IoDev_Map = get(io_devices),
-	UpdateFun = fun(Val) -> writte_ejson(Val, EJSON) end,
+	UpdateFun = fun(Val) -> write_ejson(Val, EJSON) end,
     put(io_devices, 
 		maps:update_with(Ref, UpdateFun, IoDev_Map)).
 
-writte_ejson({IoDevice, next_is_val}, EJSON) ->
+write_ejson({IoDevice, next_is_val}, EJSON) ->
 	Json = jiffy:encode(EJSON),
 	file:write(IoDevice, Json),
 	{IoDevice, next_is_separator};
-writte_ejson({IoDevice, next_is_separator}, EJSON) ->
+write_ejson({IoDevice, next_is_separator}, EJSON) ->
 	file:write(IoDevice, <<",">>),
-	writte({IoDevice, next_is_val}, EJSON).
+	write({IoDevice, next_is_val}, EJSON).
 
 
 %%====================================================================
@@ -261,7 +273,7 @@ make_report_test_() ->
       {setup, local, fun with_iodevice/0, fun delete_file/1,
 	   {inorder, 
         [{"Correct IoDevice addition", ?_assert(add_iodevice_test())},
-		 {"Correct IoDevice writting", ?_assert(writte_iodevice_test())},
+		 {"Correct IoDevice writting", ?_assert(write_iodevice_test())},
 		 {"Correct IoDevice clossing", ?_assert(del_iodevice_test())},
 		 {"io_devices is empty ", ?_assertMatch(#{}, get(io_devices))}]}}}].
 
@@ -275,10 +287,10 @@ add_iodevice_test() ->
 		fun is_reference/1, 
 		maps:keys(get(io_devices))).
 
-writte_iodevice_test() ->
+write_iodevice_test() ->
 	[Ref] =  maps:keys(get(io_devices)),
 	EJSON = #{<<"foo">> => <<"bar">>},
-	writte_iodevice(Ref, EJSON),
+	write_iodevice(Ref, EJSON),
 	true.
 
 del_iodevice_test() ->
