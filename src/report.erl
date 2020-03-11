@@ -39,7 +39,6 @@
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the log server
@@ -50,44 +49,39 @@ start_link() ->
 start() ->
   gen_server:start({local, ?SERVER}, ?MODULE, [], []).
 
-
 %%--------------------------------------------------------------------
-%% @doc
-%%
-%%
+%% @doc Creates a new report. It returns the reference of the report
+%% to use it in future writtings or to close it.
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
-new(Name) when is_atom(Name) ->
-	new(atom_to_list(Name));
+-spec new(Name :: file:name_all()) ->
+	{ok, Reference :: reference()} |
+	{error, Reason :: file:posix() | badarg | system_limit}.
 new(Name) ->
 	gen_server:call(?SERVER, {new, Name}).
 
-
 %%--------------------------------------------------------------------
-%% @doc
-%%
-%%
+%% @doc Writes a map into the report file following json convention.
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
-write(Ref, EJSON) ->
+-spec write(Reference :: reference(), EJSON :: #{}) -> 
+	ok.
+write(Reference, EJSON) ->
 	EJSON_Ext = EJSON#{
 			<<"timestamp">> => erlang:monotonic_time(millisecond),
 			<<"pid">> => erlang:term_to_binary(self())
 	},
-	gen_server:cast(?SERVER, {write, Ref, EJSON_Ext}).
+	gen_server:cast(?SERVER, {write, Reference, EJSON_Ext}).
 
-	
 %%--------------------------------------------------------------------
-%% @doc
-%%
-%%
+%% @doc Closes a report.
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
-close(Ref) ->
-	gen_server:call(?SERVER, {close, Ref}).
+-spec close(Reference :: reference()) -> 
+	  ok |
+	  {error, Reason :: file:posix() | badarg | system_limit}.
+close(Reference) ->
+	gen_server:call(?SERVER, {close, Reference}).
 
 
 %%%===================================================================
@@ -136,7 +130,6 @@ handle_call({new, File}, _From, State) ->
 			Reply = {error, Reason} 
 	end,
 	{reply, Reply, State};
-
 handle_call({close, Ref}, _From, State) ->
 	Reply = del_iodevice(Ref),
 	{reply, Reply, State};
@@ -155,7 +148,6 @@ handle_call(_Request, _From, State) ->
   {noreply, NewState :: #state{}} |
   {noreply, NewState :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #state{}}).
-
 handle_cast({write, Ref, EJSON}, State) ->
 	write_iodevice(Ref, EJSON),
 	{noreply, State};
