@@ -68,7 +68,7 @@ new(Name) ->
 	ok.
 write(Reference, EJSON) ->
 	EJSON_Ext = EJSON#{
-			<<"timestamp">> => erlang:monotonic_time(millisecond),
+			<<"timestamp">> => logger:timestamp(),
 			<<"pid">> => list_to_binary(pid_to_list(self()))
 	},
 	gen_server:cast(?SERVER, {write, Reference, EJSON_Ext}).
@@ -222,7 +222,7 @@ add_iodevice(IoDevice) ->
 del_iodevice(Ref) ->
     IoDev_Map = get(io_devices),
 	{IoDevice, _} = maps:get(Ref, IoDev_Map),
-	file:write(IoDevice, <<"[">>),
+	file:write(IoDevice, <<"]">>),
 	put(io_devices, maps:remove(Ref, IoDev_Map)),
 	file:close(IoDevice).
 
