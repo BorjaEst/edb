@@ -168,8 +168,8 @@ unique_filename() ->
 
 sample_map() ->
 	#{
-		<<"int">> => 1,
-		<<"float">> => 5.43,
+		<<"int">> => rand:uniform(100),
+		<<"float">> => rand:normal(),
 		<<"text">> => <<"Some text">>
 	}.
 
