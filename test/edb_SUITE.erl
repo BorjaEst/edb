@@ -5,7 +5,7 @@
 %%%
 %%% Created :
 %%%-------------------------------------------------------------------
--module(eunit_nntools_SUITE).
+-module(edb_SUITE).
 
 -compile(export_all).
 -compile(nowarn_export_all).
@@ -14,6 +14,10 @@
 
 -define(INFO(Info), ct:log(?LOW_IMPORTANCE, "Info report: ~p", [Info])).
 -define(ERROR(Error), ct:pal(?HI_IMPORTANCE, "Error report: ~p", [Error])).
+
+-record(test_rectab, {id, data}).
+-define(MNESIA_TEST_TABLE_ATTRIBUTES_LIST, [
+	{test_rectab, record_info(fields, test_rectab)}]).
 
 %%--------------------------------------------------------------------
 %% Function: suite() -> Info
@@ -29,6 +33,8 @@ suite() ->
 %% Reason = term()
 %%--------------------------------------------------------------------
 init_per_suite(Config) ->
+	edb:create_tables(?MNESIA_TEST_TABLE_ATTRIBUTES_LIST),
+	edb:start(?MNESIA_TEST_TABLE_ATTRIBUTES_LIST),
 	Config.
 
 %%--------------------------------------------------------------------
@@ -36,6 +42,7 @@ init_per_suite(Config) ->
 %% Config0 = Config1 = [tuple()]
 %%--------------------------------------------------------------------
 end_per_suite(_Config) ->
+	edb:stop(),
 	ok.
 
 %%--------------------------------------------------------------------
@@ -101,13 +108,17 @@ groups() ->
 %%--------------------------------------------------------------------
 all() ->
 	[
-		eunit_nndb,
-		eunit_report
+		test_edb_individual_elements,
+		test_edb_multiple_elements
 	].
 
 %%--------------------------------------------------------------------
 %% Function: TestCase() -> Info
 %% Info = [tuple()]
+%%--------------------------------------------------------------------
+my_test_case_example() ->
+	[].
+
 %%--------------------------------------------------------------------
 %% Function: TestCase(Config0) ->
 %%               ok | exit() | {skip,Reason} | {comment,Comment} |
@@ -116,8 +127,60 @@ all() ->
 %% Reason = term()
 %% Comment = term()
 %%--------------------------------------------------------------------
-eunit_nndb() ->	[].
-eunit_nndb(_Config) ->	ok = eunit:test([nndb]).
+my_test_case_example(_Config) ->
+	ok.
 
-eunit_report() ->	[].
-eunit_report(_Config) -> ok = eunit:test([report]).
+% --------------------------------------------------------------------
+% COMMON TESTS -------------------------------------------------------
+% ......................................................................................................................
+test_edb_individual_elements() ->
+	[].
+test_edb_individual_elements(_Config) ->
+	Element_1 = #test_rectab{id = {{0, make_ref()}, test_rectab}}, ?INFO(Element_1),
+	Element_2 = #test_rectab{id = {{0, make_ref()}, test_rectab}}, ?INFO(Element_2),
+	% Test writing
+	{'EXIT', {aborted, {bad_type, bad_thing}}} = (catch edb:write(bad_thing)),
+	ok = edb:write(Element_1),
+	% Test reading
+	undefined = edb:read(Element_2#test_rectab.id),
+	{'EXIT', {{badmatch, bad_thing}, _}} = (catch edb:read(bad_thing)),
+	Element_1 = edb:read(Element_1#test_rectab.id),
+	% Test deleting
+	{'EXIT', {{badmatch, bad_thing}, _}} = (catch edb:delete(bad_thing)),
+	Element_1 = edb:read(Element_1#test_rectab.id), ?INFO(Element_1),
+	ok = edb:delete(Element_1#test_rectab.id),
+	undefined = edb:read(Element_1#test_rectab.id), ?INFO(Element_1),
+	ok = edb:delete(Element_1#test_rectab.id), ?INFO(Element_1).
+
+
+% ......................................................................................................................
+test_edb_multiple_elements() ->
+	[].
+test_edb_multiple_elements(_Config) ->
+	Element_1 = #test_rectab{id = {{0, make_ref()}, test_rectab}}, ?INFO(Element_1),
+	Element_2 = #test_rectab{id = {{0, make_ref()}, test_rectab}}, ?INFO(Element_2),
+	Element_3 = #test_rectab{id = {{0, make_ref()}, test_rectab}}, ?INFO(Element_3),
+	Elements_2_3 = [Element_2, Element_3], ?INFO(Elements_2_3),
+	Elements_1_2_3 = [Element_1, Element_2, Element_3], ?INFO(Elements_1_2_3),
+	% Test writing in groups
+	{'EXIT', {aborted, {bad_type, _}}} = (catch edb:write([bad_thing1, bad_thing2])),
+	ok = edb:write(Elements_2_3),
+	% Test reading in groups
+	{'EXIT', {{badmatch, _}, _}} = (catch edb:read([bad_thing1, bad_thing2])),
+	[undefined, Element_2, Element_3] = edb:read([E#test_rectab.id || E <- Elements_1_2_3]),
+	ok = edb:write(Elements_1_2_3),
+	Elements_1_2_3 = edb:read([E#test_rectab.id || E <- Elements_1_2_3]),
+	% Test deleting in groups
+	{'EXIT', {{badmatch, _}, _}} = (catch edb:delete([bad_thing1, bad_thing2])),
+	ok = edb:delete([E#test_rectab.id || E <- Elements_2_3]),
+	[Element_1, undefined, undefined] = edb:read([E#test_rectab.id || E <- Elements_1_2_3]),
+	ok = edb:delete([E#test_rectab.id || E <- Elements_1_2_3]),
+	[undefined, undefined, undefined] = edb:read([E#test_rectab.id || E <- Elements_1_2_3]),
+	ok = edb:delete([E#test_rectab.id || E <- Elements_1_2_3]),
+	[undefined, undefined, undefined] = edb:read([E#test_rectab.id || E <- Elements_1_2_3]),
+	ok.
+
+
+% ----------------------------------------------------------------------------------------------------------------------
+% SPECIFIC HELPER FUNCTIONS --------------------------------------------------------------------------------------------
+

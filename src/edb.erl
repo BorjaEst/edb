@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 16. Aug 2018 13:08
 %%%-------------------------------------------------------------------
--module(nndb).
+-module(edb).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -222,7 +222,7 @@ wait_until_saved(Id, Element) ->
 	wait_until_saved(Id, Element, 10).
 
 wait_until_saved(Id, Element, Index) when Index > 0 ->
-	case nndb:read(Id) of
+	case edb:read(Id) of
 		Element -> ok;
 		_Other -> wait_until_saved(Id, Element, Index - 1)
 	end;
