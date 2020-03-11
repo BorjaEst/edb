@@ -134,7 +134,7 @@ handle_call({close, Ref}, _From, State) ->
 	Reply = del_iodevice(Ref),
 	{reply, Reply, State};
 handle_call(_Request, _From, State) ->
-	?LOG_INFO("Unexpected message"),
+	?LOG_NOTICE("Unexpected message"),
 	{reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -152,7 +152,7 @@ handle_cast({write, Ref, EJSON}, State) ->
 	write_iodevice(Ref, EJSON),
 	{noreply, State};
 handle_cast(_Request, State) ->
-	?LOG_INFO("Unexpected message"),
+	?LOG_NOTICE("Unexpected message"),
   	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -170,7 +170,7 @@ handle_cast(_Request, State) ->
   {noreply, NewState :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #state{}}).
 handle_info(_Info, State) ->
-	?LOG_INFO("Unexpected message"),
+	?LOG_NOTICE("Unexpected message"),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -202,7 +202,7 @@ terminate(_Reason, _State) ->
     			  Extra :: term()) ->
 	{ok, NewState :: #state{}} | {error, Reason :: term()}).
 code_change(_OldVsn, State, _Extra) ->
-	?LOG_INFO("Unexpected message"),
+	?LOG_NOTICE("Unexpected message"),
 	{ok, State}.
 
 %%%===================================================================
