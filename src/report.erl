@@ -240,7 +240,7 @@ write_ejson({IoDevice, next_is_val}, EJSON) ->
 	{IoDevice, next_is_separator};
 write_ejson({IoDevice, next_is_separator}, EJSON) ->
 	file:write(IoDevice, <<",">>),
-	write({IoDevice, next_is_val}, EJSON).
+	write_ejson({IoDevice, next_is_val}, EJSON).
 
 
 %%====================================================================
