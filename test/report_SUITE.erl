@@ -174,6 +174,6 @@ sample_map() ->
 	}.
 
 write_report() -> 
-	Ref = report:new(unique_filename()),
+	{ok, Ref} = report:new(unique_filename()),
 	[report:write(Ref, sample_map()) || _<- lists:seq(1, rand:uniform(10))],
 	ok = report:close(Ref).
