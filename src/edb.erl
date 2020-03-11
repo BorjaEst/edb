@@ -11,11 +11,22 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([start/1, stop/0, create_tables/1, check_tables/1, delete_tables/0]).
--export([read/1, dirty_read/1, write/1, dirty_write/1, delete/1, dirty_delete/1, wait_until_saved/2]).
+-export([start/1, stop/0, create_tables/1, check_tables/1, 
+		 delete_tables/0]).
+-export([read/1, dirty_read/1, write/1, dirty_write/1, delete/1, 
+		 dirty_delete/1, wait_until_saved/2]).
 
--define(MNESIA_INIT_TRIALS, 100).
--define(MNESIA_TABLE_BASE_CONFIGURATION, [{disc_copies, [node()]}, {type, set}]).
+-type attributes_table() :: {
+	Record_Identifier :: atom(),
+	Record_Fields :: [Field :: atom()]
+}.
+
+-define(MNESIA_INIT_TRIALS, 10).
+-define(MNESIA_TABLE_BASE_CONFIGURATION, 
+	[
+		{disc_copies, [node()]}, 
+		{type, set}
+	]).
 
 -record(test_record, {id, data}).
 
@@ -24,12 +35,12 @@
 %%====================================================================
 
 %%--------------------------------------------------------------------
-%% @doc
-%%
-%%
+%% @doc Starts mnesia and checks the passed attibutes table matches 
+%% the current tables.
 %% @end
 %%--------------------------------------------------------------------
-%TODO: Correct specs
+-spec start(Attributtes_TableList :: [attibutes_table()]) -> 
+	ok.
 start(Attributes_TableList) ->
 	wait_mnesia(Attributes_TableList),
 	check_tables(Attributes_TableList).
@@ -247,7 +258,7 @@ wait_mnesia(N, Check_Trans) ->
 		{atomic, _} -> running;
 		Fail ->
 			N < 0 andalso error({"Mnesia not responding", Fail}),
-			timer:sleep(10), wait_mnesia(N - 1, Check_Trans)
+			timer:sleep(20), wait_mnesia(N - 1, Check_Trans)
 	end.
 
 running_check_function(Tuples_TableElementId) ->
