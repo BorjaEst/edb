@@ -85,20 +85,20 @@ $ rebar3 release
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-1. Define name of your table and the id generators for your records. The id always must be a tuple of 2 elements, the **Unique_Id** and the **Table** name.
+1. Define an id generator with as a tuple of 2 elements, the **Unique_Id** and the **Record_Name**. Use this generator when defining the record as well:
 ```erlang
--define(ID, {make_ref(), my_table1})
+-define(ID, {make_ref(), my_record1}).
+-record(my_record1, {id = ?ID, data}).
 ```
-
-1. Define a record with the id and fileds you would like to store:
+>You can do this in the shell by:
 ```erlang
--record(test_rectab, {id = ?ID, data}).
+rd(my_record1, {id={make_ref(), my_record1}, data}).
 ```
 
 2. Create an attributes table with the fields from the defined records:
 ```erlang
 Attributes_table = [
-    {my_table1, record_info(fields, test_rectab)},
+    {my_record1, record_info(fields, my_record1)},
     ...].
 ```
 
@@ -114,22 +114,22 @@ edb:start(Attributes_table),
 
 5. Create and write some inputs. You can do it 1 by 1:
  ```erlang
-MyData = #test_rectab{data = 0},
+MyData = #my_record1{data = 0},
 edb:write(MyData).
 ```
 >or using a list of inputs:
  ```erlang
-MyList = [#test_rectab{data = X} || X <- [1,2,3,4]],
+MyList = [#my_record1{data = X} || X <- [1,2,3,4]],
 edb:write(MyData).
 ```
 
 6. Recover the data using the id from the record. You can do it 1 by 1:
  ```erlang
-MyDataCopy = edb:read(MyData#test_rectab.id).
+MyDataCopy = edb:read(MyData#my_record1.id).
 ```
 >or using a list of ids:
  ```erlang
-MyListCopy = edb:read([X#test_rectab.id || X <- MyList]).
+MyListCopy = edb:read([X#my_record1.id || X <- MyList]).
 ```
 
 _For more examples, please refer to the [Documentation]()_
