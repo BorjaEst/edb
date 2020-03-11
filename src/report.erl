@@ -69,7 +69,7 @@ new(Name) ->
 write(Reference, EJSON) ->
 	EJSON_Ext = EJSON#{
 			<<"timestamp">> => erlang:monotonic_time(millisecond),
-			<<"pid">> => erlang:term_to_binary(self())
+			<<"pid">> => list_to_binary(pid_to_list(self()))
 	},
 	gen_server:cast(?SERVER, {write, Reference, EJSON_Ext}).
 
