@@ -39,7 +39,7 @@
 %% the current tables.
 %% @end
 %%--------------------------------------------------------------------
--spec start(Attributtes_TableList :: [attibutes_table()]) -> 
+-spec start(Attributtes_TableList :: [attributes_table()]) -> 
 	ok.
 start(Attributes_TableList) ->
 	wait_mnesia(Attributes_TableList),
